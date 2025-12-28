@@ -10,7 +10,7 @@ from InvoiceMaker import generate_invoice
 from pdf import compress_pdf
 from cloudinaryUpload import upload_pdf
 
-import cloudinary  # noqa: F401 (just loads config)
+import cloudinaryConfig  # noqa: F401 (just loads config)
 
 app = FastAPI(title="POS Invoice Server")
 
