@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 from datetime import datetime
 from math import ceil
@@ -87,15 +88,17 @@ def download_invoice_pdf(invoice_number: str):
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    pdf_file = fs.get(invoice["pdf_id"])
+    grid_out = fs.get(invoice["pdf_id"])
 
-    return StreamingResponse(
-        pdf_file,
+    pdf_bytes = grid_out.read()  # ✅ IMPORTANT
+
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'inline; filename="invoice_{invoice_number}.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
             "Cache-Control": "no-store",
-            "Accept-Ranges": "bytes",
         }
     )
 
