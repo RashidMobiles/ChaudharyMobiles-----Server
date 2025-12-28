@@ -93,11 +93,12 @@ def download_invoice_pdf(invoice_number: str):
         pdf_file,
         media_type="application/pdf",
         headers={
-            # 🔑 THIS IS THE KEY CHANGE
-            "Content-Disposition": f'attachment; filename="invoice_{invoice_number}.pdf"',
+            "Content-Disposition": f'inline; filename="invoice_{invoice_number}.pdf"',
             "Cache-Control": "no-store",
+            "Accept-Ranges": "bytes",
         }
     )
+
 
 
 # ---------------- LIST INVOICES (PAGINATION) ----------------
