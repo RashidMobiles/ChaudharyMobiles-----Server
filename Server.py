@@ -8,7 +8,7 @@ from database import invoice_collection, get_next_invoice_number
 from models import InvoiceRequest
 from InvoiceMaker import generate_invoice
 from pdf import compress_pdf
-from cloudinaryUpload import upload_pdf
+from cloudinaryUpload import upload_pdf_to_cloudinary
 
 import cloudinaryConfig  # noqa: F401 (just loads config)
 
