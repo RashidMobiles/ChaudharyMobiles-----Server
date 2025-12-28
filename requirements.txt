@@ -5,3 +5,4 @@ reportlab
 python-multipart
 cloudinary 
 pikepdf
+pdf_utils
