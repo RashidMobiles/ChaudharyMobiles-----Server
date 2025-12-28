@@ -7,10 +7,10 @@ from pymongo import DESCENDING
 from database import invoice_collection, get_next_invoice_number
 from models import InvoiceRequest
 from InvoiceMaker import generate_invoice
-from pdf_utils import compress_pdf
-from cloudinary_upload import upload_pdf
+from pdf import compress_pdf
+from cloudinaryUpload import upload_pdf
 
-import cloudinary_config  # noqa: F401 (just loads config)
+import cloudinary  # noqa: F401 (just loads config)
 
 app = FastAPI(title="POS Invoice Server")
 
