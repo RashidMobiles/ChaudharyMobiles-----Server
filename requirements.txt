@@ -3,6 +3,5 @@ uvicorn
 pymongo
 reportlab
 python-multipart
-cloudinary 
+cloudinary
 pikepdf
-pdf_utils
