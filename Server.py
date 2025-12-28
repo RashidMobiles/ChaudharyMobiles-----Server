@@ -1,35 +1,32 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from fastapi.responses import StreamingResponse
 from datetime import datetime
 from math import ceil
 from pymongo import DESCENDING
-from bson import ObjectId
 
-from database import fs, invoice_collection, get_next_invoice_number
+from database import invoice_collection, get_next_invoice_number
 from models import InvoiceRequest
 from InvoiceMaker import generate_invoice
+from pdf_utils import compress_pdf
+from cloudinary_upload import upload_pdf
 
+import cloudinary_config  # noqa: F401 (just loads config)
 
 app = FastAPI(title="POS Invoice Server")
-
 
 # ---------------- CORS ----------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # ---------------- HELPERS ----------------
 def serialize_invoice(invoice: dict) -> dict:
     invoice["_id"] = str(invoice["_id"])
     return invoice
-
 
 # ---------------- CREATE INVOICE ----------------
 @app.post("/invoice")
@@ -49,17 +46,16 @@ def create_invoice(payload: InvoiceRequest):
         }
     }
 
-    # Generate PDF (in-memory)
-    pdf_file = generate_invoice(invoice_data)
+    # 1️⃣ Generate PDF (in memory)
+    pdf_buffer = generate_invoice(invoice_data)
 
-    # Store PDF in GridFS
-    pdf_id = fs.put(
-        pdf_file,
-        filename=f"invoice_{invoice_number}.pdf",
-        contentType="application/pdf"
-    )
+    # 2️⃣ Compress PDF (text-only → very small)
+    compressed_pdf = compress_pdf(pdf_buffer)
 
-    # Store invoice metadata
+    # 3️⃣ Upload to Cloudinary
+    pdf_url = upload_pdf(compressed_pdf, invoice_number)
+
+    # 4️⃣ Store metadata ONLY
     invoice_collection.insert_one({
         "invoice_number": invoice_number,
         "customer_name": payload.customer_name,
@@ -68,55 +64,27 @@ def create_invoice(payload: InvoiceRequest):
         "payment_mode": payload.payment_mode,
         "date": invoice_data["date"],
         "created_at": datetime.utcnow(),
-        "pdf_id": pdf_id
+        "pdf_url": pdf_url
     })
 
     return {
         "invoice_number": invoice_number,
-        "download_url": f"/invoice/{invoice_number}/pdf",
+        "pdf_url": pdf_url,
         "message": "Invoice created successfully"
     }
 
-
-# ---------------- DOWNLOAD PDF ----------------
-@app.get("/invoice/{invoice_number}/pdf")
-def download_invoice_pdf(invoice_number: str):
-    invoice = invoice_collection.find_one(
-        {"invoice_number": invoice_number}
-    )
-
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-
-    grid_out = fs.get(invoice["pdf_id"])
-
-    pdf_bytes = grid_out.read()  # ✅ IMPORTANT
-
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="invoice_{invoice_number}.pdf"',
-            "Content-Length": str(len(pdf_bytes)),
-            "Cache-Control": "no-store",
-        }
-    )
-
-
-
-# ---------------- LIST INVOICES (PAGINATION) ----------------
+# ---------------- LIST INVOICES ----------------
 @app.get("/invoices")
 def list_invoices(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=50),
 ):
     skip = (page - 1) * limit
-
     total = invoice_collection.count_documents({})
 
     cursor = (
         invoice_collection
-        .find({}, {"pdf_id": 0})  # exclude heavy field
+        .find({})
         .sort("created_at", DESCENDING)
         .skip(skip)
         .limit(limit)
@@ -131,7 +99,6 @@ def list_invoices(
         "limit": limit,
         "total_pages": ceil(total / limit) if total else 1
     }
-
 
 # ---------------- SEARCH INVOICES ----------------
 @app.get("/invoices/search")
@@ -153,7 +120,7 @@ def search_invoices(
 
     cursor = (
         invoice_collection
-        .find(query, {"pdf_id": 0})
+        .find(query)
         .sort("created_at", DESCENDING)
         .skip(skip)
         .limit(limit)
